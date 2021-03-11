@@ -130,7 +130,14 @@ namespace Convey.Logging
                     interval = RollingInterval.Day;
                 }
 
-                loggerConfiguration.WriteTo.File(path, rollingInterval: interval);
+                var template = fileOptions.OutputTemplate;
+                if (string.IsNullOrWhiteSpace(template))
+                { 
+                    loggerConfiguration.WriteTo.File(path, rollingInterval: interval);
+                    return;
+                }
+
+                loggerConfiguration.WriteTo.File(path, rollingInterval: interval, outputTemplate: template);
             }
 
             if (elkOptions.Enabled)
