@@ -11,7 +11,7 @@ using Newtonsoft.Json.Serialization;
 
 namespace Convey.MessageBrokers.Outbox.EntityFramework.Internals
 {
-    internal sealed class EntityFrameworkMessageOutbox<TContext> : IMessageOutbox, IMessageOutboxAccessor
+    public sealed class EntityFrameworkMessageOutbox<TContext> : IMessageOutbox, IMessageOutboxAccessor
         where TContext : DbContext
     {
         private static readonly JsonSerializerSettings SerializerSettings = new JsonSerializerSettings
