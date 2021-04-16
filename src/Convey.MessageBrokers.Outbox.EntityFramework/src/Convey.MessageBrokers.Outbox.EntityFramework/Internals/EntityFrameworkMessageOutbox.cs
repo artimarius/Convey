@@ -69,7 +69,10 @@ namespace Convey.MessageBrokers.Outbox.EntityFramework.Internals
                     Id = messageId,
                     ProcessedAt = DateTime.UtcNow
                 });
+                await _dbContext.SaveChangesAsync();
+                
                 await transaction.CommitAsync();
+                
                 _logger.LogTrace($"Processed a message with id: '{messageId}'.");
             }
             catch (Exception ex)
