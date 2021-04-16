@@ -6,7 +6,10 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
+using Newtonsoft.Json;
 using Polly;
+using JsonSerializer = System.Text.Json.JsonSerializer;
 
 namespace Convey.HTTP
 {
@@ -18,14 +21,16 @@ namespace Convey.HTTP
             PropertyNameCaseInsensitive = true
         };
 
+        private readonly ILogger<ConveyHttpClient> _logger;
         private readonly HttpClient _client;
         private readonly HttpClientOptions _options;
 
         public ConveyHttpClient(HttpClient client, HttpClientOptions options,
-            ICorrelationContextFactory correlationContextFactory, ICorrelationIdFactory correlationIdFactory)
+            ICorrelationContextFactory correlationContextFactory, ICorrelationIdFactory correlationIdFactory, ILogger<ConveyHttpClient> logger)
         {
             _client = client;
             _options = options;
+            _logger = logger;
             if (!string.IsNullOrWhiteSpace(_options.CorrelationContextHeader))
             {
                 var correlationContext = correlationContextFactory.Create();
@@ -51,7 +56,10 @@ namespace Convey.HTTP
             => SendResultAsync<T>(uri, Method.Get);
 
         public virtual Task<HttpResponseMessage> PostAsync(string uri, object data = null)
-            => SendAsync(uri, Method.Post, GetJsonPayload(data));
+        {
+            _logger.LogTrace("Sending Post request to Uri: {Uri}", uri);
+            return SendAsync(uri, Method.Post, GetJsonPayload(data));
+        }
 
         public Task<HttpResponseMessage> PostAsync(string uri, HttpContent content)
             => SendAsync(uri, Method.Post, content);
@@ -200,7 +208,11 @@ namespace Convey.HTTP
 
         protected virtual Task<HttpResponseMessage> SendAsync(string uri, Method method, HttpContent content = null)
             => Policy.Handle<Exception>()
-                .WaitAndRetryAsync(_options.Retries, r => TimeSpan.FromSeconds(Math.Pow(2, r)))
+                .WaitAndRetryAsync(_options.Retries, r => TimeSpan.FromSeconds(Math.Pow(2, r)),
+                    (ex, span, retry, context) =>
+                    {
+                        _logger.LogError(ex, "Caught an exception: {Exception} on retry {Retry} sending request to uri {Uri}, timespan: {Span}", ex.Message, retry.ToString(), uri, span.ToString());
+                    })
                 .ExecuteAsync(() =>
                 {
                     var requestUri = uri.StartsWith("http") ? uri : $"http://{uri}";
@@ -227,7 +239,7 @@ namespace Convey.HTTP
                 return null;
             }
 
-            var content = new StringContent(JsonSerializer.Serialize(data, SerializerOptions), Encoding.UTF8, "application/json");
+            var content = new StringContent(JsonConvert.SerializeObject(data), Encoding.UTF8, "application/json");
             if (_options.RemoveCharsetFromContentType && content.Headers.ContentType is not null)
             {
                 content.Headers.ContentType.CharSet = null;
